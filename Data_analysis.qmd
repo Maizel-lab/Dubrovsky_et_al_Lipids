@@ -1,0 +1,1037 @@
+---
+title: "Code for Figures of Dubrovsky et al."
+subtitle: "Spatiotemporal Dynamics of Anionic Phospholipids Orchestrate Lateral Root Initiation and Morphogenesis in Arabidopsis thaliana"
+editor: visual
+editor_options: 
+  chunk_output_type: console
+format:
+  html:
+    code-tools: true
+execute:
+  warning: false
+  message: false
+---
+
+This notebook contains all the code to produce the Figures (main and supplemental) of the manuscript.
+
+# Libraries
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(janitor)
+library(ggdist)
+library(agricolae)
+library(paletteer)
+library(png)
+library(patchwork)
+library(cowplot)
+library(ggpubr)
+library(magick)
+library(grid)
+library(ggtext)
+library(scales)
+```
+
+# Figure 1 - Distribution of PI4P and PI(4,5)P2 during LRP development
+
+## Data import & tidying
+
+```{r}
+fig1_data <-
+  read_xlsx(path="Data/data_for_all_figures.xlsx", sheet="FIG1-raw") |> 
+  clean_names() |> 
+  pivot_longer(cols=c('core', 'flank', 'adjacent'), values_to = 'signal', names_to = 'region') |> 
+  mutate(region = fct_relevel(region, c('core', 'flank', 'adjacent')),
+         stage = str_c("St ", stage),
+         measurement = str_replace(measurement, "Membrane", "Plasma Membrane"))
+```
+
+## Metadata
+
+```{r}
+  fig1_metadata <- 
+    fig1_data |> 
+    filter(!is.na(signal)) |>
+    group_by(reporter, measurement, stage, region) |> 
+    summarize(n=n())
+```
+
+## Figure 1
+
+### Generate plots
+
+```{r}
+#| warning: false
+#| message: false
+pip4 <- 
+  fig1_data |> 
+  filter(reporter=="PIP4" & measurement == "Plasma Membrane") |> 
+  ggplot(aes(x=region, y=signal, color = reporter))+
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width=1/5, alpha = 1/3, size=3)+
+  scale_color_manual(values =  as.character(paletteer::paletteer_d("colorblindr::OkabeIto")[2]))+
+  geom_richtext(data=fig1_metadata |> filter(reporter=="PIP4" & measurement == "Plasma Membrane"), aes(label = str_c("*n*=", n), y=0), color='black', fill = NA, label.color = NA)+
+  facet_grid(stage~.)+
+  theme_pubr()+
+  theme(strip.background = element_blank(),
+        panel.border = element_blank(),
+        legend.position = "none") +
+  stat_compare_means(comparisons = list(c(1,2), c(1,3)), # comparisons we want to display
+                     method = "wilcox",
+                     label = "p.values",
+                     tip.length = 0.03,
+                     label.y.npc = 0.5,
+                     size = 3)+
+  labs(x= "Region",
+       y = "Relative Signal at Plasma Membrane (a.u.)")+
+  ggtitle("PI4P")+
+  theme(plot.title = element_markdown(hjust = 0.5),
+        axis.title = element_text(size = 12),       # Axis titles (x and y)
+        axis.text = element_text(size = 12),        # Tick labels
+        strip.text = element_text(size = 12)        # Facet labels
+  )
+
+pip45p2 <- 
+  fig1_data |> 
+  filter(reporter=="PI45P2" & measurement == "Plasma Membrane") |> 
+  ggplot(aes(x=region, y=signal, color = reporter))+
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width=1/5, alpha = 1/3, size=3)+
+  scale_color_manual(values =  as.character(paletteer::paletteer_d("colorblindr::OkabeIto")[3]))+
+  geom_richtext(data=fig1_metadata |> filter(reporter=="PI45P2" & measurement == "Plasma Membrane"), aes(label = str_c("*n*=", n), y=0), color='black', fill = NA, label.color = NA)+
+  facet_grid(stage~.)+
+  theme_pubr()+
+  theme(strip.background = element_blank(),
+        panel.border = element_blank(),
+        legend.position = "none") +
+  stat_compare_means(comparisons = list(c(1,2), c(1,3)), # comparisons we want to display
+                     method = "wilcox",
+                     label = "p.values",
+                     tip.length = 0.03,
+                     size = 3)+
+  labs(x= "Region",
+       y = "Relative Signal at Plasma Membrane (a.u.)")+
+  ggtitle("PI(4,5)P<sub>2</sub>")+
+  theme(plot.title = element_markdown(hjust = 0.5),
+        axis.title = element_text(size = 12),       # Axis titles (x and y)
+        axis.text = element_text(size = 12),        # Tick labels
+        strip.text = element_text(size = 12)        # Facet labels
+  )
+```
+
+### Include images
+
+```{r}
+img_pip4 <- readPNG("Data/PIP4.png")
+img_pi45p2 <- readPNG("Data/PIP2.png")
+
+panel_img_pip4 <- ggdraw() + draw_image(img_pip4, scale = 1) +
+  ggtitle("PI4P")+
+  theme(plot.title = element_markdown(hjust = 0.5))
+
+panel_img_pi45p2 <- ggdraw() + draw_image(img_pi45p2, scale = 1) +
+  ggtitle("PI(4,5)P<sub>2</sub>")+
+  theme(plot.title = element_markdown(hjust = 0.5))
+```
+
+### Compose the figure
+
+```{r}
+Fig1 <- (panel_img_pip4 + panel_img_pi45p2) /(pip4 + pip45p2) +
+   plot_layout(heights = c(1, 1.7))+
+   plot_annotation(tag_levels = 'A') &
+  theme(plot.tag = element_text(size = 18, face='bold'))
+Fig1
+```
+
+### Export
+
+```{r}
+ggsave("Figures/Main/Fig1/Fig1.png",
+       Fig1,
+       limitsize = FALSE,
+       units = c("cm"),
+       width = 22, height = 34, bg = "white")
+
+ggsave("Figures/Main/Fig1/Fig1.pdf",
+       Fig1,
+       limitsize = FALSE,
+       units = c("cm"),
+       width = 22, height = 34)
+```
+
+## Figure S1
+
+### Generate plots
+
+```{r}
+#| warning: false
+#| message: false
+pip4_supp <- 
+  fig1_data |> 
+  filter(reporter=="PIP4" & measurement == "Cytosol") |> 
+  ggplot(aes(x=region, y=signal, color = reporter))+
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width=1/5, alpha = 1/3, size=3)+
+  scale_color_manual(values =  as.character(paletteer::paletteer_d("colorblindr::OkabeIto")[2]))+
+  geom_richtext(data=fig1_metadata |> filter(reporter=="PIP4" & measurement == "Cytosol"), aes(label = str_c("*n*=", n), y=0), color='black', fill = NA, label.color = NA)+
+  facet_grid(stage~.)+
+  theme_pubr()+
+  theme(strip.background = element_blank(),
+        panel.border = element_blank(),
+        legend.position = "none") +
+  stat_compare_means(comparisons = list(c(1,2), c(1,3)), # comparisons we want to display
+                     method = "wilcox",
+                     label = "p.values",
+                     tip.length = 0.03,
+                     label.y.npc = 0.5,
+                     size = 3)+
+  labs(x= "Region",
+       y = "Relative Signal in Cytosol (a.u.)")+
+  ggtitle("PI4P")+
+  theme(plot.title = element_markdown(hjust = 0.5),
+        axis.title = element_text(size = 12),       # Axis titles (x and y)
+        axis.text = element_text(size = 12),        # Tick labels
+        strip.text = element_text(size = 12)        # Facet labels
+  )
+
+pip45p2_supp <- 
+  fig1_data |> 
+  filter(reporter=="PI45P2" & measurement == "Cytosol") |> 
+  ggplot(aes(x=region, y=signal, color = reporter))+
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width=1/5, alpha = 1/3, size=3)+
+  scale_color_manual(values =  as.character(paletteer::paletteer_d("colorblindr::OkabeIto")[3]))+
+  geom_richtext(data=fig1_metadata |> filter(reporter=="PI45P2" & measurement == "Cytosol"), aes(label = str_c("*n*=", n), y=0), color='black', fill = NA, label.color = NA)+
+  facet_grid(stage~.)+
+  theme_pubr()+
+  theme(strip.background = element_blank(),
+        panel.border = element_blank(),
+        legend.position = "none") +
+  stat_compare_means(comparisons = list(c(1,2), c(1,3)), # comparisons we want to display
+                     method = "wilcox",
+                     label = "p.values",
+                     tip.length = 0.03,
+                     size = 3)+
+  labs(x= "Region",
+       y = "Relative Signal in Cytosol (a.u.)")+
+  ggtitle("PI(4,5)P<sub>2</sub>")+
+  theme(plot.title = element_markdown(hjust = 0.5),
+        axis.title = element_text(size = 12),       # Axis titles (x and y)
+        axis.text = element_text(size = 12),        # Tick labels
+        strip.text = element_text(size = 12)        # Facet labels
+  )
+```
+
+### Compose the figure
+
+```{r}
+Fig1_supp <- (pip4_supp + pip45p2_supp) +
+   plot_annotation(tag_levels = 'A') &
+  theme(plot.tag = element_text(size = 18, face='bold'))
+Fig1_supp
+```
+
+### Export
+
+```{r}
+ggsave("Figures/Supplemental/FigS1/FigS1.png",
+       Fig1_supp,
+       limitsize = FALSE,
+       units = c("cm"),
+       width = 22, height = 30, bg = "white")
+
+ggsave("Figures/Supplemental/FigS1/FigS1.pdf",
+       Fig1_supp,
+       limitsize = FALSE,
+       units = c("cm"),
+       width = 22, height = 30)
+```
+
+# Figure 2 - Changes in plasma membrane anionic phospholipid levels in xylem-pole pericycle cells before and after lateral root initiation
+
+## Data import & tidying
+
+```{r}
+fig2_data <-
+  read_xlsx(path="Data/data_for_all_figures.xlsx", sheet="FIG2-raw") |> 
+  clean_names()|> 
+  pivot_longer(cols=contains("lri"), values_to = 'signal', names_to = 'region') |>
+  separate_wider_delim(region, delim = "_", names = c('time','lri','cell_loc')) |> 
+  select(-lri) |> 
+  mutate(cell_loc = fct_recode(cell_loc,
+                               "Inner" = "inner",
+                               "Outer" = "outer",
+                               "Transversal"="tr"),
+         time = fct_relevel(time, c('before', 'after')),
+         reporter = fct_relevel(reporter, c('PS', 'PIP4', 'PI45P2')))
+```
+
+## Metadata
+
+```{r}
+  fig2_metadata <- 
+    fig2_data |> 
+    filter(!is.na(signal)) |>
+    group_by(reporter, time, cell_loc) |> 
+    summarize(n=n())
+```
+
+## Plotting
+
+```{r}
+#| warning: false
+#| message: false
+pip45p2 <- 
+  fig2_data |> 
+  filter(reporter=="PI45P2") |>
+  ggplot(aes(x=time, y=signal, color = reporter))+
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width=1/5, alpha = 1/3, size=3)+
+  scale_color_manual(values =  as.character(paletteer::paletteer_d("colorblindr::OkabeIto")[3]))+
+  geom_richtext(data=fig2_metadata |> filter(reporter=="PI45P2"), aes(label = str_c("*n*=", n), y=0), color='black', fill = NA, label.color = NA)+
+  facet_grid(.~cell_loc)+
+  theme_pubr()+
+  theme(strip.background = element_blank(),         panel.border = element_blank(),         legend.position = "none") +
+  stat_compare_means(comparisons = list(c(1,2)), # comparisons we want to display
+                     method = "wilcox",
+                     label = "p.values",
+                     tip.length = 0.03,
+                     size = 3)+
+  labs(x= "Lateral Root Initiation",
+       y = "Normalised Intensity (a.u.)")+
+  ggtitle("PI(4,5)P<sub>2</sub>")+
+  theme(plot.title = element_markdown(hjust = 0.5),
+        axis.title = element_text(size = 12),       # Axis titles (x and y)
+        axis.text = element_text(size = 12),        # Tick labels
+        strip.text = element_text(size = 12)        # Facet labels
+  )
+
+pi4p <- 
+  fig2_data |> 
+  filter(reporter=="PIP4") |>
+  ggplot(aes(x=time, y=signal, color = reporter))+
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width=1/5, alpha = 1/3, size=3)+
+  scale_color_manual(values =  as.character(paletteer::paletteer_d("colorblindr::OkabeIto")[2]))+
+  geom_richtext(data=fig2_metadata |> filter(reporter=="PIP4"), aes(label = str_c("*n*=", n), y=0), color='black', fill = NA, label.color = NA)+
+  facet_grid(.~cell_loc)+
+  theme_pubr()+
+  theme(strip.background = element_blank(),         panel.border = element_blank(),         legend.position = "none") +
+  stat_compare_means(comparisons = list(c(1,2)), # comparisons we want to display
+                     method = "wilcox",
+                     label = "p.values",
+                     tip.length = 0.03,
+                     size = 3)+
+  labs(x= "Lateral Root Initiation",
+       y = "Normalised Intensity (a.u.)")+
+  ggtitle("PI4P")+
+  theme(plot.title = element_markdown(hjust = 0.5),
+        axis.title = element_text(size = 12),       # Axis titles (x and y)
+        axis.text = element_text(size = 12),        # Tick labels
+        strip.text = element_text(size = 12)        # Facet labels
+  )
+
+ps <- 
+  fig2_data |> 
+  filter(reporter=="PS") |>
+  ggplot(aes(x=time, y=signal, color = reporter))+
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width=1/5, alpha = 1/3, size=3)+
+  scale_color_manual(values =  as.character(paletteer::paletteer_d("colorblindr::OkabeIto")[1]))+
+  geom_richtext(data=fig2_metadata |> filter(reporter=="PS"), aes(label = str_c("*n*=", n), y=0), color='black', fill = NA, label.color = NA)+
+  facet_grid(.~cell_loc)+
+  theme_pubr()+
+  theme(strip.background = element_blank(),         panel.border = element_blank(),         legend.position = "none") +
+  stat_compare_means(comparisons = list(c(1,2)), # comparisons we want to display
+                     method = "wilcox",
+                     label = "p.values",
+                     tip.length = 0.03,
+                     size = 3)+
+  labs(x= "Lateral Root Initiation",
+       y = "Normalised Intensity (a.u.)")+
+  ggtitle("PS")+
+  theme(plot.title = element_markdown(hjust = 0.5),
+        axis.title = element_text(size = 12),       # Axis titles (x and y)
+        axis.text = element_text(size = 12),        # Tick labels
+        strip.text = element_text(size = 12)        # Facet labels
+  )
+```
+
+## Include images
+
+```{r}
+img_overview <- readPNG("Data/Schematic.png")
+
+panel_img_overview <- ggdraw() + draw_image(img_overview, scale = 1)
+```
+
+## Compose the figure
+
+```{r}
+layout = "
+AABB
+AACC
+AADD
+"
+
+Fig2 <- panel_img_overview + pi4p + pip45p2 + ps +
+  plot_layout(design = layout,
+              widths = c(1/2, 1/2)) +
+  plot_annotation(tag_levels = 'A') & theme(plot.tag = element_text(size = 18, face='bold'))
+Fig2
+
+```
+
+## Export
+
+```{r}
+ggsave("Figures/Main/Fig2/Fig2.png",
+       Fig2,
+       limitsize = FALSE,
+       units = c("cm"),
+       width = 30, height = 30, bg = "white")
+
+ggsave("Figures/Main/Fig2/Fig2.pdf",
+       Fig2,
+       limitsize = FALSE,
+       units = c("cm"),
+       width = 30, height = 30)
+```
+
+# Figure 3 - Dynamics of anionic phospholipids abundance upon founder cell activation
+
+## Data import & tidying
+
+```{r}
+fig3_data <-
+  read_xlsx(path="Data/data_for_all_figures.xlsx", sheet="FIG3-raw") |> 
+  pivot_longer(cols=any_of(as.character(seq(-15, 6, by = 0.5))), values_to = 'signal', names_to = 'time') |>
+  separate_wider_delim(reporter_rep, delim = "-", names = c('reporter','rep')) |> 
+  mutate(reporter = fct_relevel(reporter, c('PS', 'PIP4', 'PI45P2')),
+         time = as.double(time))
+```
+
+## Metadata
+
+```{r}
+fig3_metadata <- 
+    fig3_data |> 
+    filter(!is.na(signal)) |>
+    group_by(reporter, time) |> 
+    summarize(n=n(),
+              avg = mean(signal),
+              sd= sd(signal),
+              se = sd/sqrt(n-1))
+```
+
+## Comparisons of samples
+
+```{r}
+# Subset the data
+ps_data <- 
+  fig3_data |> 
+  filter(reporter == "PS") |>
+  filter(time %in% as.character(seq(-4, 2, by = 0.5))) |> 
+  mutate(time = fct_relevel(as.factor(time), "0"))
+
+pip4_data <- 
+  fig3_data |> 
+  filter(reporter == "PIP4") |>
+  filter(time %in% as.character(seq(-3, 2, by = 0.5))) |> 
+  mutate(time = fct_relevel(as.factor(time), "0"))
+
+pi45p2_data <- 
+  fig3_data |> 
+  filter(reporter == "PI45P2") |>
+  filter(time %in% as.character(seq(-3, 3, by = 0.5))) |> 
+  mutate(time = fct_relevel(as.factor(time), "0"))
+
+# AOV, Tukey and add the significance letters to the metadata
+fit <- aov(signal ~ time, data = ps_data)
+hsd <- HSD.test(fit, "time", group = TRUE)
+group_letters <- hsd$groups %>%
+  rownames_to_column(var = "time") |> 
+  as_tibble() |> 
+  mutate(reporter="PS")
+
+fig3_metadata <- 
+  fig3_metadata |> 
+  mutate(time = factor(time)) |> 
+  left_join(group_letters, by = c('reporter', 'time'), keep=FALSE)
+
+fit <- aov(signal ~ time, data = pi45p2_data)
+hsd <- HSD.test(fit, "time", group = TRUE)
+group_letters <- hsd$groups %>%
+  rownames_to_column(var = "time") |> 
+  as_tibble() |> 
+  mutate(reporter="PI45P2")
+
+fig3_metadata <- 
+  fig3_metadata |> 
+  mutate(time = factor(time)) |> 
+  left_join(group_letters, by = c('reporter', 'time'), keep=FALSE)
+
+fit <- aov(signal ~ time, data = pip4_data)
+hsd <- HSD.test(fit, "time", group = TRUE)
+group_letters <- hsd$groups %>%
+  rownames_to_column(var = "time") |> 
+  as_tibble() |> 
+  mutate(reporter="PIP4")
+
+fig3_metadata <- 
+  fig3_metadata |> 
+  mutate(time = factor(time)) |> 
+  left_join(group_letters, by = c('reporter', 'time'), keep=FALSE)
+
+# clean up
+fig3_metadata <- 
+  fig3_metadata |> 
+  unite("groups", starts_with("groups"), na.rm = TRUE, remove = TRUE) |> 
+  select(-contains("signal")) |> 
+  mutate(time = as.numeric(time))
+```
+
+## Plotting
+
+```{r}
+ps_plot <- 
+  fig3_metadata |> 
+  filter(reporter == "PS") |>
+  filter(time %in% as.character(seq(-4, 2, by = 0.5))) |> 
+  ggplot(aes(x=time, y=avg))+
+  geom_linerange(aes(ymin=avg-se, ymax=avg+se, group=reporter, color=reporter), size =2, alpha=1/3)+
+  geom_line(aes(group=reporter, color=reporter), size=2)+
+  geom_point(aes(group=reporter, color=reporter), size=4)+
+  scale_color_manual(values =  as.character(paletteer::paletteer_d("colorblindr::OkabeIto")[1]))+
+  scale_x_continuous(limits = c(-4, 3), breaks = seq(-4,3,1))+
+  scale_y_continuous(position= "right", limits = c(0.5, 2.5), breaks = seq(0.5,2.5,0.5))+
+  geom_richtext(data=fig3_metadata |> 
+                  filter(reporter=="PS") |> 
+                  filter(time %in% seq(-4, 2, by = 0.5)), aes(label = str_c("*n*=", n), y=0.5), color='black', fill = NA, label.color = NA)+
+  geom_richtext(data=fig3_metadata |> 
+                  filter(reporter=="PS") |> 
+                  filter(time %in% seq(-4, 2, by = 0.5)), aes(label = groups, y=avg+se+0.1), color='black', fill = NA, label.color = NA)+
+  theme_pubr()+
+  theme(legend.position = "none",
+        plot.title = element_markdown(hjust = 0.5),
+        axis.title = element_text(size = 12),       # Axis titles (x and y)
+        axis.text = element_text(size = 12),        # Tick labels
+        strip.text = element_text(size = 12)        # Facet labels
+  )+
+  labs(x= "Time to FC division (hours)",
+       y = "Sensor Intensity Normalised to FC division time (a.u.)",
+       color="Reporter")
+
+pip4_plot <- 
+  fig3_metadata |> 
+  filter(reporter == "PIP4") |>
+  filter(time %in% as.character(seq(-3, 2, by = 0.5))) |> 
+  ggplot(aes(x=time, y=avg))+
+  geom_linerange(aes(ymin=avg-se, ymax=avg+se, group=reporter, color=reporter), size =2, alpha=1/3)+
+  geom_line(aes(group=reporter, color=reporter), size=2)+
+  geom_point(aes(group=reporter, color=reporter), size=4)+
+  scale_color_manual(values =  as.character(paletteer::paletteer_d("colorblindr::OkabeIto")[2]))+
+  scale_x_continuous(limits = c(-4, 3), breaks = seq(-4,3,1))+
+  scale_y_continuous(position= "right", limits = c(0.5, 2.5), breaks = seq(0.5,2.5,0.5))+
+  geom_richtext(data=fig3_metadata |>
+                  filter(reporter == "PIP4") |>
+                  filter(time %in% seq(-3, 2, by = 0.5)), aes(label = str_c("*n*=", n), y=0.5), color='black', fill = NA, label.color = NA)+
+  geom_richtext(data=fig3_metadata |> 
+                  filter(reporter=="PIP4") |> 
+                  filter(time %in% seq(-3, 2, by = 0.5)), aes(label = groups, y=avg+se+0.1), color='black', fill = NA, label.color = NA)+
+  theme_pubr()+
+  theme(legend.position = "none",
+        plot.title = element_markdown(hjust = 0.5),
+        axis.title = element_text(size = 12),       # Axis titles (x and y)
+        axis.text = element_text(size = 12),        # Tick labels
+        strip.text = element_text(size = 12)        # Facet labels
+  )+
+  labs(x= "Time to FC division (hours)",
+       y = "Sensor Intensity Normalised to FC division time (a.u.)",
+       color="Reporter")
+
+pi45p2_plot <- 
+  fig3_metadata |> 
+  filter(reporter == "PI45P2") |>
+  filter(time %in% as.character(seq(-3, 3, by = 0.5))) |> 
+  ggplot(aes(x=time, y=avg))+
+  geom_linerange(aes(ymin=avg-se, ymax=avg+se, group=reporter, color=reporter), size =2, alpha=1/3)+
+  geom_line(aes(group=reporter, color=reporter), size=2)+
+  geom_point(aes(group=reporter, color=reporter), size=4)+
+  scale_color_manual(values =  as.character(paletteer::paletteer_d("colorblindr::OkabeIto")[3]))+
+  scale_x_continuous(limits = c(-4, 3), breaks = seq(-4,3,1))+
+  scale_y_continuous(position= "right", limits = c(0.5, 2.5), breaks = seq(0.5,2.5,0.5))+
+  geom_richtext(data=fig3_metadata  |>
+                  filter(reporter == "PI45P2") |>
+                  filter(time %in% seq(-3, 3, by = 0.5)), aes(label = str_c("*n*=", n), y=0.5), color='black', fill = NA, label.color = NA)+
+  geom_richtext(data=fig3_metadata |> 
+                  filter(reporter=="PI45P2") |> 
+                  filter(time %in% seq(-3, 3, by = 0.5)), aes(label = groups, y=avg+se+0.1), color='black', fill = NA, label.color = NA)+
+  theme_pubr()+
+  theme(legend.position = "none",
+        plot.title = element_markdown(hjust = 0.5),
+        axis.title = element_text(size = 12),       # Axis titles (x and y)
+        axis.text = element_text(size = 12),        # Tick labels
+        strip.text = element_text(size = 12)        # Facet labels
+  )+
+  labs(x= "Time to FC division (hours)",
+       y = "Sensor Intensity Normalised to FC division time (a.u.)",
+       color="Reporter")
+```
+
+## Include images
+
+```{r}
+img_pip4 <- readPNG("Data/Fig FC V1 adjusted Panel A_max brightness.png")
+img_pi45p2 <- readPNG("Data/Fig FC V1 adjusted Panel B_max brightness.png")
+img_ps <- readPNG("Data/Fig FC V1 adjusted Panel C No layers.png")
+
+panel_img_pip4 <- ggdraw() + draw_image(img_pip4, scale = 1) +
+  draw_label("PI4P", x = 0.02, y = 0.5, size = 12, fontface="bold", angle = 90)
+
+panel_img_pi45p2 <- ggdraw() + draw_image(img_pi45p2, scale = 1) +
+  draw_label("PI(4,5)P2", x = 0.02, y = 0.5, size = 12, fontface="bold", angle = 90)
+
+panel_img_ps <- ggdraw() + draw_image(img_ps, scale = 1) +
+  draw_label("PS", x = 0.02, y = 0.5, size = 12, fontface="bold", angle = 90)
+```
+
+## Compose the figure
+
+```{r}
+layout = "
+AB
+CD
+EF
+"
+
+text_anno <- ggdraw() + draw_label("Time to FC division (hours)", x = 0.5, y = 0.5, size = 12)
+
+Fig3 <- panel_img_pip4 + pip4_plot + panel_img_pi45p2 + pi45p2_plot + panel_img_ps + ps_plot +
+  plot_layout(design = layout,
+              widths = c(1,0.6),
+              axis_titles = "collect") +
+  inset_element(text_anno, left = 0, bottom = 0.1, right = -1.2, top = 0, align_to = 'full', ignore_tag = TRUE) +
+  plot_annotation(tag_levels = 'A') & theme(plot.tag = element_text(size = 18, face='bold'))
+Fig3
+```
+
+## Export
+
+```{r}
+ggsave("Figures/Main/Fig3/Fig3.png",
+       Fig3,
+       limitsize = FALSE,
+       units = c("in"),
+       width = 9.6, height = 11.3, bg = "white")
+
+ggsave("Figures/Main/Fig3/Fig3.pdf",
+       Fig3,
+       limitsize = FALSE,
+       units = c("in"),
+       width = 9.6, height = 11.3)
+```
+
+# Figure 4 - Lateral root initiation is significantly affected in pip5k1pip5k2 double mutant
+
+## Data import & tidying
+
+```{r}
+fig4_data <-
+  read_xlsx(path="Data/data_for_all_figures.xlsx", sheet="FIG4-raw") |> 
+  pivot_longer(cols=any_of(c("wt", "pip5k1pip5k2")), values_to = 'values', names_to = 'genotype') |>
+  mutate(genotype = fct_relevel(genotype, c('wt', 'pip5k1pip5k2')))
+```
+
+## Metadata
+
+```{r}
+fig4_metadata <- 
+    fig4_data |> 
+    filter(!is.na(values)) |>
+    group_by(measurement, genotype) |> 
+    summarize(n=n())
+```
+
+## Figure 4
+
+### Generate plots
+
+```{r}
+custom_labels <- c(
+  wt = "WT",
+  pip5k1pip5k2 = "*pip5k1/pip5k2*"
+)
+
+fig4_lri <- 
+  fig4_data |> 
+  filter(measurement == "lri") |> 
+  ggplot(aes(x=genotype, y=values))+
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width=1/5, alpha = 1/3, size=3)+
+  geom_richtext(data=fig4_metadata |> filter(measurement=="lri"), aes(label = str_c("*n*=", n), y=0), color='black', fill = NA, label.color = NA)+
+  scale_x_discrete(labels = custom_labels) +
+  theme_pubr()+
+  theme(axis.text.x = element_markdown())+
+  stat_compare_means(comparisons = list(c(1,2)), # comparisons we want to display
+                     method = "wilcox",
+                     label = "p.values",
+                     tip.length = 0.03,
+                     size = 3)+
+  labs(x= "Genotype",
+       y = "Lateral Root Initiation Index")
+
+fig4_density <- 
+  fig4_data |> 
+  filter(measurement == "density") |> 
+  ggplot(aes(x=genotype, y=values))+
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width=1/5, alpha = 1/3, size=3)+
+  scale_x_discrete(labels = custom_labels) +
+  theme_pubr()+
+  theme(axis.text.x = element_markdown())+
+  geom_richtext(data=fig4_metadata |> filter(measurement=="density"), aes(label = str_c("*n*=", n), y=0), color='black', fill = NA, label.color = NA)+
+  stat_compare_means(comparisons = list(c(1,2)), # comparisons we want to display
+                     method = "wilcox",
+                     label = "p.values",
+                     tip.length = 0.03,
+                     size = 3)+
+  labs(x= "Genotype",
+       y = "Density of Lateral Root Initiation Events (per mm)")
+
+Fig4 <- fig4_density + fig4_lri + plot_annotation(tag_levels = 'A') & theme(plot.tag = element_text(size = 18, face='bold'))
+Fig4
+```
+
+### Export
+
+```{r}
+ggsave("Figures/Main/Fig4/Fig4.png",
+       Fig4,
+       limitsize = FALSE,
+       units = c("cm"),
+       width = 15, height = 15, bg = "white")
+
+ggsave("Figures/Main/Fig4/Fig4.pdf",
+       Fig4,
+       limitsize = FALSE,
+       units = c("cm"),
+       width = 15, height = 15)
+```
+
+## Figure S2
+
+### Generate plots
+
+```{r}
+FigS2_a <- 
+  fig4_data |> 
+  filter(measurement == "root_length") |> 
+  ggplot(aes(x=genotype, y=values))+
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width=1/5, alpha = 1/3, size=3)+
+  geom_richtext(data=fig4_metadata |> filter(measurement=="root_length"), aes(label = str_c("*n*=", n), y=0), color='black', fill = NA, label.color = NA)+
+  scale_x_discrete(labels = custom_labels) +
+  theme_pubr()+
+  theme(axis.text.x = element_markdown())+
+  stat_compare_means(comparisons = list(c(1,2)), # comparisons we want to display
+                     method = "wilcox",
+                     label = "p.values",
+                     tip.length = 0.03,
+                     size = 3)+
+  labs(x= "Genotype",
+       y = "Root length (mm)")
+
+FigS2_b <- 
+  fig4_data |> 
+  filter(measurement == "cell_length") |> 
+  ggplot(aes(x=genotype, y=values))+
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width=1/5, alpha = 1/3, size=3)+
+  geom_richtext(data=fig4_metadata |> filter(measurement=="cell_length"), aes(label = str_c("*n*=", n), y=0), color='black', fill = NA, label.color = NA)+
+  scale_x_discrete(labels = custom_labels) +
+  theme_pubr()+
+  theme(axis.text.x = element_markdown())+
+  stat_compare_means(comparisons = list(c(1,2)), # comparisons we want to display
+                     method = "wilcox",
+                     label = "p.values",
+                     tip.length = 0.03,
+                     size = 3)+
+  labs(x= "Genotype",
+       y = "Cell length (um)")
+
+FigS2_c <- 
+  fig4_data |> 
+  filter(measurement == "lre") |> 
+  ggplot(aes(x=genotype, y=values))+
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width=1/5, alpha = 1/3, size=3)+
+  geom_richtext(data=fig4_metadata |> filter(measurement=="lre"), aes(label = str_c("*n*=", n), y=-5), color='black', fill = NA, label.color = NA)+
+  scale_x_discrete(labels = custom_labels) +
+  theme_pubr()+
+  theme(axis.text.x = element_markdown())+
+  stat_compare_means(comparisons = list(c(1,2)), # comparisons we want to display
+                     method = "wilcox",
+                     label = "p.values",
+                     tip.length = 0.03,
+                     size = 3)+
+  labs(x= "Genotype",
+       y = "Proportion of emerged LRPs (%)")
+
+
+FigS2 <- FigS2_a + FigS2_b + FigS2_c + plot_annotation(tag_levels = 'A') & theme(plot.tag = element_text(size = 18, face='bold'))
+FigS2
+```
+
+### Export
+
+```{r}
+ggsave("Figures/Supplemental/FigS2/FigS2.png",
+       FigS2,
+       limitsize = FALSE,
+       units = c("cm"),
+       width = 30, height = 15, bg = "white")
+
+ggsave("Figures/Supplemental/FigS2/FigS2.pdf",
+       FigS2,
+       limitsize = FALSE,
+       units = c("cm"),
+       width = 30, height = 15)
+```
+
+# Figure 5 - Inducible depletion of PI(4,5)P₂ stimulates LR formation
+
+## Data import & tidying
+
+```{r}
+fig5_LRD <-
+  read_xlsx(path="Data/data_for_all_figures.xlsx", sheet="FIG5-LRD") |> 
+  pivot_longer(cols=any_of(contains("iDePP")), values_to = 'values', names_to = 'sample') |>
+  separate_wider_delim(sample, delim = "-", names = c('genotype','promoter')) |> 
+   mutate(promoter = str_c("*",promoter,"*"),
+         genotype = str_c("*",genotype,"*"),
+         promoter = fct_relevel(promoter, '*proXPP*'),
+         genotype = fct_relevel(genotype, '*iDePP*'))
+
+fig5_STAGES <-
+  read_xlsx(path="Data/data_for_all_figures.xlsx", sheet="FIG5-Stages") |> 
+  pivot_longer(cols=any_of(contains("iDePP")), values_to = 'values', names_to = 'sample') |>
+  separate_wider_delim(sample, delim = "-", names = c('stage','genotype')) |> 
+  mutate(promoter = str_c("*",promoter,"*"),
+         genotype = str_c("*",genotype,"*"),
+         promoter = fct_relevel(promoter, '*proXPP*'),
+         genotype = fct_relevel(genotype, '*iDePP*'),
+         stage = str_replace(stage, 'Stage_', 'St '))
+```
+
+## Metadata
+
+```{r}
+fig5_LRD_metadata <- 
+    fig5_LRD |> 
+    filter(!is.na(values)) |>
+    group_by(metric, genotype, promoter) |> 
+    summarize(n=n())
+
+fig5_STAGES_metadata <- 
+    fig5_STAGES |> 
+    filter(!is.na(values)) |>
+    group_by(promoter, stage, genotype) |> 
+    summarize(n=n())
+```
+
+## Figure 5
+
+### Generate plots
+
+```{r}
+fig5_LRD_plot <- 
+  fig5_LRD |> 
+  filter(metric == "LRP_d") |> 
+  ggplot(aes(x=genotype, y=values, color=promoter))+
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width=1/5, alpha = 1/3, size=3)+
+  scale_color_manual(values =  as.character(paletteer::paletteer_d("colorblindr::OkabeIto")[5:6]))+
+  geom_richtext(data=fig5_LRD_metadata |> filter(metric=="LRP_d"), aes(label = str_c("*n*=", n), y=0), color='black', fill = NA, label.color = NA)+
+  facet_grid(.~promoter)+
+  theme_pubr()+
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        panel.border = element_blank(),
+        axis.text.x = element_markdown(),
+        strip.text = element_markdown()) +
+  stat_compare_means(comparisons = list(c(1,2)), # comparisons we want to display
+                     method = "wilcox",
+                     label = "p.values",
+                     tip.length = 0.03,
+                     size = 3)+
+  labs(x= "Construct",
+       y = "Lateral Root Primordium Density (per mm)")
+
+fig5_Stages_plot <- 
+  fig5_STAGES |> 
+  ggplot(aes(x=genotype, y=values, color=promoter))+
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width=1/5, alpha = 1/3, size=3)+
+  scale_color_manual(values =  as.character(paletteer::paletteer_d("colorblindr::OkabeIto")[5:6]))+
+  geom_richtext(data=fig5_STAGES_metadata, aes(label = str_c("*n*=", n), y=-10), color='black', fill = NA, label.color = NA)+
+  facet_grid(promoter~stage)+
+  theme_pubr()+
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        panel.border = element_blank(),
+        axis.text.x = element_markdown(),
+        strip.text = element_markdown()) +
+  stat_compare_means(comparisons = list(c(1,2)), # comparisons we want to display
+                     method = "wilcox",
+                     label = "p.values",
+                     tip.length = 0.03,
+                     size = 3)+
+  labs(x= "Construct",
+       y = "Percentage of LRP stages")
+```
+
+### Include Images
+
+```{r}
+img_idepp <- readPNG("Data/iDepp_principle.png")
+img_proXPP <- readPNG("Data/Picture_proXPP.png")
+img_proGATA <- readPNG("Data/Picture_proGATA23.png")
+
+panel_img_idepp <- ggdraw() + draw_image(img_idepp, scale = 1)
+panel_img_proXPP <- ggdraw() + draw_image(img_proXPP, scale = 1)+
+  draw_label("proXPP>>iDePP", x = -0.01, y = 0.5, size = 10, fontface="italic", angle = 90)+coord_fixed()
+panel_img_proGATA <- ggdraw() + draw_image(img_proGATA, scale = 1)+
+  draw_label("proGATA23>>iDePP_DEAD", x = 0.10, y = 0.5, size = 10, fontface="italic", angle = 90)+coord_fixed()
+```
+
+### Compose Figures
+
+```{r}
+layout = "
+ABC
+DEE
+"
+
+Fig5 <- panel_img_idepp + panel_img_proXPP + panel_img_proGATA +  fig5_LRD_plot + fig5_Stages_plot+
+  plot_layout(design = layout,
+              heights = c(1/3, 2/3),
+              widths = c(0.4, 0.3, 0.3)) +
+  plot_annotation(tag_levels = 'A') & theme(plot.tag = element_text(size = 18, face='bold'))
+Fig5
+```
+
+### Export
+
+```{r}
+ggsave("Figures/Main/Fig5/Fig5.png",
+       Fig5,
+       limitsize = FALSE,
+       units = c("cm"),
+       width = 30, height = 22, bg = "white")
+
+ggsave("Figures/Main/Fig5/Fig5.pdf",
+       Fig5,
+       limitsize = FALSE,
+       units = c("cm"),
+       width = 30, height = 22)
+```
+
+## FigS3
+
+### Generate plots
+
+```{r}
+fig5_LRD_plot_a <- 
+  fig5_LRD |> 
+  filter(metric == "root_increment") |> 
+  ggplot(aes(x=genotype, y=values, color=promoter))+
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width=1/5, alpha = 1/3, size=3)+
+  scale_color_manual(values =  as.character(paletteer::paletteer_d("colorblindr::OkabeIto")[5:6]))+
+  geom_richtext(data=fig5_LRD_metadata |> filter(metric=="root_increment"), aes(label = str_c("*n*=", n), y=0), color='black', fill = NA, label.color = NA)+
+  facet_grid(.~promoter)+
+  theme_pubr()+
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        panel.border = element_blank(),
+        axis.text.x = element_markdown(),
+        strip.text = element_markdown()) +
+  stat_compare_means(comparisons = list(c(1,2)), # comparisons we want to display
+                     method = "wilcox",
+                     label = "p.values",
+                     tip.length = 0.03,
+                     size = 3)+
+  labs(x= "Construct",
+       y = "Primary Root Increment (mm)")
+
+fig5_LRD_plot_b <- 
+  fig5_LRD |> 
+  filter(metric == "LRP_n") |> 
+  ggplot(aes(x=genotype, y=values, color=promoter))+
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width=1/5, alpha = 1/3, size=3)+
+  scale_color_manual(values =  as.character(paletteer::paletteer_d("colorblindr::OkabeIto")[5:6]))+
+  geom_richtext(data=fig5_LRD_metadata |> filter(metric=="LRP_n"), aes(label = str_c("*n*=", n), y=0), color='black', fill = NA, label.color = NA)+
+  facet_grid(.~promoter)+
+  theme_pubr()+
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        panel.border = element_blank(),
+        axis.text.x = element_markdown(),
+        strip.text = element_markdown()) +
+  stat_compare_means(comparisons = list(c(1,2)), # comparisons we want to display
+                     method = "wilcox",
+                     label = "p.values",
+                     tip.length = 0.03,
+                     size = 3)+
+  labs(x= "Construct",
+       y = "Number of Lateral Root Primordia")
+
+
+
+```
+
+### Include Images
+
+```{r}
+img_1 <- readPNG("Data/Suppl_iDePP 31h.png")
+img_2 <- readPNG("Data/Suppl_iDePP_120h.png")
+
+panel_img_1 <- ggdraw() + draw_image(img_1, scale = 1) + coord_fixed() + draw_label("31h DEX induction", x = 0, y = 0.5, size = 10, fontface="bold", angle = 90)
+panel_img_2 <- ggdraw() + draw_image(img_2, scale = 1) + coord_fixed() + draw_label("120h DEX induction", x = 0, y = 0.5, size = 10, fontface="bold", angle = 90)
+```
+
+### Compose Figures
+
+```{r}
+# Supplemental Figure
+layout = "
+AABBxx
+CCCDDD
+"
+
+FigS3 <-  panel_img_1 + panel_img_2 +fig5_LRD_plot_a + fig5_LRD_plot_b +
+  plot_layout(design = layout,
+              heights = c(1/2, 1/2))+
+  plot_annotation(tag_levels = 'A') & theme(plot.tag = element_text(size = 18, face='bold'))
+FigS3
+```
+
+### Export
+
+```{r}
+ggsave("Figures/Supplemental/FigS3/FigS3.png",
+       FigS3,
+       limitsize = FALSE,
+       units = c("cm"),
+       width = 21, height = 21, bg = "white")
+
+ggsave("Figures/Supplemental/FigS3/FigS3.pdf",
+       FigS3,
+       limitsize = FALSE,
+       units = c("cm"),
+       width = 21, height = 21)
+```
